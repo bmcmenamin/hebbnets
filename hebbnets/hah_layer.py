@@ -6,13 +6,17 @@
 import numpy as np
 
 ABSMAX_WEIGHT_LIMIT = 1.0e4
+SOFT_THRESH = 0.1
 
 # Neural activation functions 
 ACTIVATION_FUNCS = {
     'relu': lambda x: np.maximum(x, 0, x),
     'sigmoid': lambda x: 1.0 / (1 + np.exp(-x)),
-    'linear': lambda x: x
+    'linear': lambda x: x,
+    'soft_thresh': lambda x: np.sign(x) * np.maximum(np.abs(x) - SOFT_THRESH, 0.0, x)
 }
+
+
 
 
 def _rescale_weights_in_place(weights):
@@ -80,12 +84,18 @@ class HahLayer(object):
             self.layer_input_size + has_bias,
             self.num_nodes
         )
+        self.input_weights /= 0.1 * np.linalg.norm(
+            self.input_weights,
+            axis=1, keepdims=True)
 
         self.lateral_weights = np.random.randn(
             self.num_nodes,
             self.num_nodes
         )
         np.fill_diagonal(self.lateral_weights, 0.0)
+        self.lateral_weights /= 0.1 * np.linalg.norm(
+            self.lateral_weights,
+            axis=1, keepdims=True)
 
         self.params = {
             'gamma': gamma,

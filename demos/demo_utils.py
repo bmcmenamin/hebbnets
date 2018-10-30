@@ -3,8 +3,9 @@
 """
 import itertools
 import random
-import requests
 from io import BytesIO
+
+import requests
 
 import numpy as np
 from PIL import Image
@@ -126,19 +127,25 @@ def yeild_patch_batch(image_urls, patch_size=[21, 21], patch_stride=[15, 15], ba
                 patch_batch = []    
     return patch_batch
 
-def turn_input_weights_to_pilimg(hah_layer, patch_size):
+def turn_input_weights_to_pilimg(hah_layer, patch_size, whiten_matrix):
     """Turn input weights into PIL images
     Args:
         hah_layer: hah layer object
+        patch_size: tuple with patch dimensions
+        whiten_matrix: whitening matrix used on input patches
     Returns:
         list of PIL images
     """
     pil_imgs = []
     
-    weights = hah_layer.input_weights
+    dewhiten_mat = np.linalg.pinv(whiten_matrix)
     if hah_layer.params['bias']:
-        weights = weights[:-1, :]
+        weights = dewhiten_mat.dot(hah_layer.input_weights[:-1, :])
+    else:
+        weights = dewhiten_mat.dot(hah_layer.input_weights)
 
+    weights = (64.0 * weights) / np.std(weights, axis=0, keepdims=True) + 128
+    weights = np.uint8(weights)
     for node_num in range(weights.shape[1]):
         np_img = weights[:, node_num].reshape(patch_size)
         pil_imgs.append(Image.fromarray(np_img, mode='L'))
