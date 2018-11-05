@@ -17,8 +17,6 @@ ACTIVATION_FUNCS = {
 }
 
 
-
-
 def _rescale_weights_in_place(weights):
     """Rescale every element of a wieght matrix in place if any
     of the values exceed the ABSMAX_WEIGHT_LIMIT
@@ -52,7 +50,7 @@ class HahLayer(object):
 
         return "<{}>".format(",".join(to_repr))
 
-    def __init__(self, num_nodes, prev_layer, act_type='linear', has_bias=True, gamma=0.0):
+    def __init__(self, num_nodes, prev_layer, act_type='linear', has_bias=True, gamma=0.0, noise_var=0.001):
         """Set layer activation based on previous layer
         Args:
             num_nodes: Number of nodes in this layer
@@ -100,7 +98,8 @@ class HahLayer(object):
         self.params = {
             'gamma': gamma,
             'bias': has_bias,
-            'act_type': act_type
+            'act_type': act_type,
+            'noise_var': noise_var
         }
 
         if act_type not in ACTIVATION_FUNCS:
@@ -151,7 +150,6 @@ class HahLayer(object):
 
         return input_value
 
-
     def update_activation(self, input_value=None):
         """Update input weights with hebb rule
         Args:
@@ -173,6 +171,10 @@ class HahLayer(object):
 
             if np.allclose(_next_step, self.activation):
                 break
+
+        # Add a little random noise to prevent gradients from dying in
+        # thesholded activation functions
+        self.activation += self.params['noise_var'] * np.random.randn(self.num_nodes,)
 
     def update_weights(self, input_value=None):
         """Update input weights with Hebbian/Antihebbian rule
