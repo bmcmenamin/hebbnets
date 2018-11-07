@@ -127,27 +127,29 @@ def yeild_patch_batch(image_urls, patch_size=[21, 21], patch_stride=[15, 15], ba
                 patch_batch = []    
     return patch_batch
 
-def turn_input_weights_to_pilimg(hah_layer, patch_size, whiten_matrix):
+def turn_input_weights_to_pilimg(hah_layer, patch_size, dewhiten_matrix):
     """Turn input weights into PIL images
     Args:
         hah_layer: hah layer object
         patch_size: tuple with patch dimensions
-        whiten_matrix: whitening matrix used on input patches
+        dewhiten_matrix: whitening matrix used on input patches
     Returns:
         list of PIL images
     """
     pil_imgs = []
     
-    dewhiten_mat = np.linalg.pinv(whiten_matrix)
     if hah_layer.params['bias']:
-        weights = dewhiten_mat.dot(hah_layer.input_weights[:-1, :])
+        white_weights = hah_layer.input_weights[:-1, :].T
     else:
-        weights = dewhiten_mat.dot(hah_layer.input_weights)
+        white_weights = hah_layer.input_weights.T
 
-    weights = (64.0 * weights) / np.std(weights, axis=0, keepdims=True) + 128
-    weights = np.uint8(weights)
-    for node_num in range(weights.shape[1]):
-        np_img = weights[:, node_num].reshape(patch_size)
+    dewhite_weights = white_weights.dot(dewhiten_matrix)
+    dewhite_weights *= 32.0  / np.std(dewhite_weights, axis=1, keepdims=True)
+    dewhite_weights += 128
+    dewhite_weights = np.uint8(dewhite_weights)
+
+    for weights in dewhite_weights:
+        np_img = weights.reshape(patch_size)
         pil_imgs.append(Image.fromarray(np_img, mode='L'))
     
     return pil_imgs
