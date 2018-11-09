@@ -138,7 +138,7 @@ class Layer(abc.ABC):
         }
 
         self.activation = np.zeros((self.num_nodes, 1))
-        self._soft_thresh_val = np.tile(0.0, (num_nodes, 1))
+        self._soft_thresh_val = np.tile(1.0, (num_nodes, 1))
 
 
 
@@ -201,17 +201,31 @@ class HahLayer(Layer):
         input_value_times_weights = self.input_weights.T.dot(input_value)
         self.activation = np.zeros((self.num_nodes, 1), dtype='float64')
 
-        for _ in range(self.MAX_ACTIVATION_TIME_STEPS):
+        for i in range(self.MAX_ACTIVATION_TIME_STEPS):
 
             _next_activation = self.activation_func(
                 input_value_times_weights - self.lateral_weights.T.dot(self.activation)
             )
+            utils.rescale_absmax_in_place(_next_activation, absmax_limit=100.0)
 
             error = utils.max_abs_reldiff(self.activation, _next_activation)
             self.activation = _next_activation
 
             if error < self.ACTIVATION_ERROR_TOL:
                 break
+
+
+    def _update_cums(self):
+        self._cum_abs_activation = np.nan_to_num(self._cum_abs_activation)
+        self._cum_sqr_activation = np.nan_to_num(self._cum_sqr_activation)
+        self._soft_thresh_val = np.nan_to_num(self._soft_thresh_val)
+
+        self._cum_abs_activation += self.CUMSCORE_LR * np.abs(self.activation)
+        self._cum_sqr_activation += self.CUMSCORE_LR * self.activation ** 2
+        self._soft_thresh_val = (
+            0.5 * self.params.get('reg_lambda', 1.0) * 
+            self._cum_abs_activation / self._cum_sqr_activation
+        )
 
     def update_weights(self, input_value=None):
         """Update input weights with Hebbian/Antihebbian rule
@@ -231,17 +245,11 @@ class HahLayer(Layer):
             self.activation += self.params['noise_var'] * np.random.randn(*self.activation.shape).astype('float64')
 
         # update cumulative activation per node, used for adaptive learning-rate scaling
-        activation_sqr = self.activation ** 2
-        self._cum_abs_activation += self.CUMSCORE_LR * np.abs(self.activation)
-        self._cum_sqr_activation += self.CUMSCORE_LR * activation_sqr
-        self._soft_thresh_val = (
-            0.5 * self.params.get('reg_lambda', 0.0) * 
-            self._cum_abs_activation / self._cum_sqr_activation
-        )
+        self._update_cums()
 
         # Calculate update deltas
         activation_norm = self.activation / self._cum_sqr_activation
-        activation_sqr_norm = activation_sqr / self._cum_sqr_activation
+        activation_sqr_norm = self.activation * activation_norm
 
         self.input_weights += (
             input_value.dot(activation_norm.T) -
@@ -255,5 +263,5 @@ class HahLayer(Layer):
 
         # Enforce constraints on weights
         np.fill_diagonal(self.lateral_weights, 0.0)
-        utils.rescale_absmax_in_place(self.input_weights, absmax_limit=1000.0 / self.num_nodes)
-        utils.rescale_absmax_in_place(self.lateral_weights, absmax_limit=1000.0 / self.num_nodes)
+        utils.rescale_absmax_in_place(self.input_weights, absmax_limit=10.0)
+        utils.rescale_absmax_in_place(self.lateral_weights, absmax_limit=10.0)

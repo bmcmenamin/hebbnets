@@ -16,10 +16,13 @@ def rescale_absmax_in_place(data_matrix, absmax_limit=10.0):
     Returns:
         None, works in place
     """
+
+    data_matrix = np.nan_to_num(data_matrix)
+
     absmax_val = max(data_matrix.max(), -data_matrix.min())
     if absmax_val > absmax_limit:
-        scale = data_matrix / absmax_limit
-        data_matrix /= scale
+        scale = absmax_limit / absmax_val
+        data_matrix *= scale
 
 
 def max_abs_reldiff(value0, value1, pad=0.001):
