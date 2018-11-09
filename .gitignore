@@ -102,3 +102,7 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# Code from authors
+NSM_rate.zip
+NSM_rate/

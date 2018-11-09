@@ -5,7 +5,9 @@
 import random
 
 import numpy as np
-from hah_layer import HahLayer
+
+from hebbnets.hebbnets.layers import HahLayer
+
 
 class MultilayerHahNetwork(object):
     """A network built from one or more layers of HAH layers"""
