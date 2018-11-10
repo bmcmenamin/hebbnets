@@ -59,6 +59,7 @@ def retry_get_request(url, max_retries):
     
     return response
 
+
 def yield_images_from_urls(url_list, max_retries=5):
     """Given a list of image URLs, yield each as a PIL image
     Args:
@@ -79,6 +80,7 @@ def yield_images_from_urls(url_list, max_retries=5):
                 yield pil_img
             except OSError:
                 print("Can't interpret {} as image. Skipping.".format(url))
+
 
 def yield_image_patches(input_image, patch_size, patch_stride):
     """Yield image patches from input PIL image
@@ -127,32 +129,37 @@ def yeild_patch_batch(image_urls, patch_size=[21, 21], patch_stride=[15, 15], ba
                 patch_batch = []    
     return patch_batch
 
-def turn_input_weights_to_pilimg(hah_layer, patch_size, dewhiten_matrix):
+
+def turn_input_weights_to_pilimg(hah_layer, patch_size):
     """Turn input weights into PIL images
     Args:
         hah_layer: hah layer object
         patch_size: tuple with patch dimensions
-        dewhiten_matrix: whitening matrix used on input patches
     Returns:
         list of PIL images
     """
     pil_imgs = []
     
     if hah_layer.params['bias']:
-        white_weights = hah_layer.input_weights[:-1, :].T
+        weights = hah_layer.input_weights[:-1, :].T.copy()
     else:
-        white_weights = hah_layer.input_weights.T
+        weights = hah_layer.input_weights.T.copy()
 
-    dewhite_weights = white_weights.dot(dewhiten_matrix)
-    dewhite_weights *= 32.0  / np.std(dewhite_weights, axis=1, keepdims=True)
-    dewhite_weights += 128
-    dewhite_weights = np.uint8(dewhite_weights)
+    weights -= np.mean(weights)
+    weights /= np.std(weights, axis=1, keepdims=True)
+    np.clip(weights, -4, 4, out=weights)
+    weights -= np.median(weights)
+    weights *= 32.0
+    weights += 128
 
-    for weights in dewhite_weights:
-        np_img = weights.reshape(patch_size)
+    weights = np.uint8(weights)
+
+    for weight in weights:
+        np_img = weight.reshape(patch_size)
         pil_imgs.append(Image.fromarray(np_img, mode='L'))
     
     return pil_imgs
+
 
 def place_pilimgs_in_grid(list_of_imgs, pixel_buffer=10):
     """Put list of PIL images into a single grid image

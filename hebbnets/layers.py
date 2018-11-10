@@ -39,10 +39,6 @@ class Layer(abc.ABC):
     def _linear(activation):
         return activation
 
-    def _soft_thresh(self, activation):
-        abs_thresh = np.maximum(np.abs(activation) - self._soft_thresh_val, 0.0)
-        return np.sign(activation) * abs_thresh
-
     def _get_input_value_format(self, input_value):
 
         if not isinstance(input_value, np.ndarray):
@@ -95,7 +91,6 @@ class Layer(abc.ABC):
             act_type: String naming the type of activation function
                 to use
             has_bias: Bool indicating whether layer has bias
-            reg_lambda: Strength of soft-threshold regularization parameter
             noise_var: variance for guassian noise applied to all activations
 
         Returns:
@@ -103,7 +98,6 @@ class Layer(abc.ABC):
         """
         act_type = kwargs.get('act_type', 'linear')
         has_bias = kwargs.get('has_bias', False)
-        reg_lambda = kwargs.get('reg_lambda', 0.0)
         noise_var = kwargs.get('noise_var', 0.0)
 
         self.num_nodes = num_nodes
@@ -123,7 +117,6 @@ class Layer(abc.ABC):
             'relu': self._relu,
             'sigmoid': self._sigmoid,
             'linear': self._linear,
-            'soft_thresh': self._soft_thresh
         }
 
         if act_type not in _activation_func_names:
@@ -131,14 +124,12 @@ class Layer(abc.ABC):
         self.activation_func = _activation_func_names[act_type]
 
         self.params = {
-            'reg_lambda': reg_lambda,
             'bias': has_bias,
             'act_type': act_type,
             'noise_var': noise_var
         }
 
         self.activation = np.zeros((self.num_nodes, 1))
-        self._soft_thresh_val = np.tile(1.0, (num_nodes, 1))
 
 
 
@@ -148,8 +139,8 @@ class HahLayer(Layer):
     """
 
     MAX_ACTIVATION_TIME_STEPS = 200
-    ACTIVATION_ERROR_TOL = 1.0e-3
-
+    ACTIVATION_ERROR_TOL = 1.0e-2
+    MAX_WEIGHT = 10.0
     CUMSCORE_LR = 0.01
 
     def __init__(self, num_nodes, prev_layer, **kwargs):
@@ -162,7 +153,6 @@ class HahLayer(Layer):
             act_type: String naming the type of activation function
                 to use
             has_bias: Bool indicating whether layer has bias
-            reg_lambda: Strength of soft-threshold regularization parameter
             noise_var: variance for guassian noise applied to all activations
 
         Returns:
@@ -197,35 +187,48 @@ class HahLayer(Layer):
             None. Upates self.activation in place
         """
         input_value = self._get_input_values(input_value)
-
-        input_value_times_weights = self.input_weights.T.dot(input_value)
         self.activation = np.zeros((self.num_nodes, 1), dtype='float64')
 
-        for i in range(self.MAX_ACTIVATION_TIME_STEPS):
+        input_value_times_weights = self.input_weights.T.dot(input_value)
+        if self.params['act_type'] == 'linear':
+            _lateral_inv = np.linalg.pinv(self.lateral_weights.T + np.eye(self.num_nodes))
+            self.activation = _lateral_inv.dot(input_value_times_weights)
+        else:
+            for _ in range(self.MAX_ACTIVATION_TIME_STEPS):
+                next_activation = self.activation_func(
+                    input_value_times_weights - self.lateral_weights.T.dot(self.activation)
+                )
 
-            _next_activation = self.activation_func(
-                input_value_times_weights - self.lateral_weights.T.dot(self.activation)
-            )
-            utils.rescale_absmax_in_place(_next_activation, absmax_limit=100.0)
-
-            error = utils.max_abs_reldiff(self.activation, _next_activation)
-            self.activation = _next_activation
-
-            if error < self.ACTIVATION_ERROR_TOL:
-                break
+                error = utils.max_abs_reldiff(self.activation, next_activation)
+                self.activation = next_activation
+                if error < self.ACTIVATION_ERROR_TOL:
+                    break
 
 
     def _update_cums(self):
-        self._cum_abs_activation = np.nan_to_num(self._cum_abs_activation)
-        self._cum_sqr_activation = np.nan_to_num(self._cum_sqr_activation)
-        self._soft_thresh_val = np.nan_to_num(self._soft_thresh_val)
-
         self._cum_abs_activation += self.CUMSCORE_LR * np.abs(self.activation)
         self._cum_sqr_activation += self.CUMSCORE_LR * self.activation ** 2
-        self._soft_thresh_val = (
-            0.5 * self.params.get('reg_lambda', 1.0) * 
-            self._cum_abs_activation / self._cum_sqr_activation
+
+    def _rescale_weights(self):
+
+        #root_mean_squared_weight = np.sqrt(np.mean(
+        #    np.append(self.input_weights.ravel(), self.lateral_weights.ravel()) ** 2
+        #))
+        #self.input_weights /= root_mean_squared_weight
+        #self.lateral_weights /= root_mean_squared_weight
+
+        np.clip(
+            self.input_weights,
+            -self.MAX_WEIGHT, self.MAX_WEIGHT,
+            out=self.input_weights
         )
+
+        np.clip(
+            self.lateral_weights,
+            -self.MAX_WEIGHT, self.MAX_WEIGHT,
+            out=self.lateral_weights
+        )
+
 
     def update_weights(self, input_value=None):
         """Update input weights with Hebbian/Antihebbian rule
@@ -252,16 +255,16 @@ class HahLayer(Layer):
         activation_sqr_norm = self.activation * activation_norm
 
         self.input_weights += (
-            input_value.dot(activation_norm.T) -
+            np.outer(input_value, activation_norm) -
             self.input_weights * activation_sqr_norm.T
         )
 
         self.lateral_weights += (
-            self.activation.dot(activation_norm.T) -
+            np.outer(self.activation, activation_norm) -
             self.lateral_weights * activation_sqr_norm.T
         )
 
         # Enforce constraints on weights
         np.fill_diagonal(self.lateral_weights, 0.0)
-        utils.rescale_absmax_in_place(self.input_weights, absmax_limit=10.0)
-        utils.rescale_absmax_in_place(self.lateral_weights, absmax_limit=10.0)
+        self._rescale_weights()
+
