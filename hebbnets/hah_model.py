@@ -137,7 +137,6 @@ class MultilayerHahEmbedding(Network):
                 class_match * layer.activation
                 for layer in self.layers
             ]
-
             self.propogate_input(samp2)
             self.update_weights(target_activations)
 
@@ -153,9 +152,6 @@ class MultilayerHahEmbedding(Network):
             if idx == 0:
                 layer.update_weights(
                     input_value=self.input_value,
-                    target_value=target
-                )
+                    target_value=target)
             else:
-                layer.update_weights(
-                    target_value=target
-                )
+                layer.update_weights(target_value=target)

@@ -239,7 +239,10 @@ class HahLayer(Layer):
         input_value = self._get_input_values(input_value)
 
         if target_value is None:
-            target_value = self.activation
+            target_value = np.zeros(self.activation.shape)
+
+        target_value += self.activation
+        target_value /= 2.0
 
         # Add a little random noise to prevent gradients from dying in
         # thesholded activation functions
