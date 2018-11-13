@@ -218,11 +218,9 @@ class HahLayer(Layer):
 
     def _calc_weight_delta(self, input_value, target_value):
         target_norm = target_value / self._cum_sqr_activation
-        target_sqr_norm = target_value * target_norm
-        return (
-            np.outer(input_value, target_norm) -
-            input_value * target_sqr_norm.T
-        )
+        outer_prod = np.outer(input_value, target_norm)
+        ident = np.eye(outer_prod.shape[1])
+        return outer_prod.dot(ident - target_norm.T)
 
     def update_weights(self, input_value=None, target_value=None):
         """Update input weights with Hebbian/Antihebbian rule
@@ -239,7 +237,10 @@ class HahLayer(Layer):
         input_value = self._get_input_values(input_value)
 
         if target_value is None:
-            target_value = self.activation
+            target_value = np.zeros(self.activation.shape)
+
+        target_value += self.activation
+        target_value /= 2.0
 
         # Add a little random noise to prevent gradients from dying in
         # thesholded activation functions

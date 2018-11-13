@@ -119,26 +119,28 @@ class MultilayerHahNetwork(Network):
 class MultilayerHahEmbedding(Network):
     """A network built from one or more layers of HAH layers"""
 
-    def _train_epoch(self, data_set):
+    def _train_epoch(self, data_set, num_pairs_per_sample=10):
         """Perform an epoch-worth of model updates
 
         Args:
             data_set: an iterable of tuples of (trainingdata, classlabel) pairs
+            num_pairs_per_sample: integer number of other train pairs to use per sample
         Returns:
             None
         """
 
-        for (samp1, class1), (samp2, class2) in itertools.product(data_set, repeat=2):
+        for samp1, class1 in data_set:
+            for samp2, class2 in random.sample(data_set, num_pairs_per_sample):
 
-            class_match = 2 * (float(class1 == class2) - 0.5)
+                class_match = 2 * ((class1 == class2) - 0.5)
 
-            self.propogate_input(samp1)
-            target_activations = [
-                class_match * layer.activation
-                for layer in self.layers
-            ]
-            self.propogate_input(samp2)
-            self.update_weights(target_activations)
+                self.propogate_input(samp1)
+                target_activations = [
+                    class_match * layer.activation.copy()
+                    for layer in self.layers
+                ]
+                self.propogate_input(samp2)
+                self.update_weights(target_activations)
 
     def update_weights(self, target_activations):
         """Update model weights based on current activation
