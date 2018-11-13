@@ -204,7 +204,6 @@ class HahLayer(Layer):
                     break
 
     def _rescale_weights(self):
-
         np.clip(
             self.input_weights,
             -self.MAX_WEIGHT, self.MAX_WEIGHT,
@@ -217,12 +216,21 @@ class HahLayer(Layer):
             out=self.lateral_weights
         )
 
+    def _calc_weight_delta(self, input_value, target_value):
+        target_norm = target_value / self._cum_sqr_activation
+        target_sqr_norm = target_value * target_norm
+        return (
+            np.outer(input_value, target_norm) -
+            input_value * target_sqr_norm.T
+        )
 
-    def update_weights(self, input_value=None):
+    def update_weights(self, input_value=None, target_value=None):
         """Update input weights with Hebbian/Antihebbian rule
         Args:
             input_value: set to list/numpy array being fed as input into this
                layer, otherwise input will be inferred from a previous layer
+           target_value: set to list/numpy array with length equal to number of
+               nodes for supervised learning. Leave as none for unsupervised
         Returns:
             None. Upates self.input_weights, self.lateral_weights in place
         """
@@ -230,29 +238,20 @@ class HahLayer(Layer):
         # Get weight deltas using modified Oja rule
         input_value = self._get_input_values(input_value)
 
+        if target_value is None:
+            target_value = self.activation
+
         # Add a little random noise to prevent gradients from dying in
         # thesholded activation functions
         if self.params.get('noise_var', 0) > 0:
-            self.activation += self.params['noise_var'] * np.random.randn(*self.activation.shape).astype('float64')
+            target_value += self.params['noise_var'] * np.random.randn(*target_value.shape).astype('float64')
 
         # update cumulative activation per node, used for adaptive learning-rate scaling
         self._cum_sqr_activation += self.CUMSCORE_LR * self.activation ** 2
 
-        # Calculate update deltas
-        activation_norm = self.activation / self._cum_sqr_activation
-        activation_sqr_norm = self.activation * activation_norm
-
-        self.input_weights += (
-            np.outer(input_value, activation_norm) -
-            self.input_weights * activation_sqr_norm.T
-        )
-
-        self.lateral_weights += (
-            np.outer(self.activation, activation_norm) -
-            self.lateral_weights * activation_sqr_norm.T
-        )
+        self.input_weights += self._calc_weight_delta(input_value, target_value)
+        self.lateral_weights += self._calc_weight_delta(self.activation, self.activation)
 
         # Enforce constraints on weights
         np.fill_diagonal(self.lateral_weights, 0.0)
         self._rescale_weights()
-
