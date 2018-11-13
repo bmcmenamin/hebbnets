@@ -140,7 +140,7 @@ class HahLayer(Layer):
 
     MAX_ACTIVATION_TIME_STEPS = 200
     ACTIVATION_ERROR_TOL = 1.0e-2
-    MAX_WEIGHT = 10.0
+    MAX_WEIGHT = 1.0e6
     CUMSCORE_LR = 0.01
 
     def __init__(self, num_nodes, prev_layer, **kwargs):
@@ -175,7 +175,6 @@ class HahLayer(Layer):
         self.lateral_weights /= np.sqrt(np.prod(self.lateral_weights.shape))
 
         self._cum_sqr_activation = np.tile(1000.0, (num_nodes, 1))
-        self._cum_abs_activation = np.tile(1000.0, (num_nodes, 1))
 
 
     def update_activation(self, input_value=None):
@@ -204,18 +203,7 @@ class HahLayer(Layer):
                 if error < self.ACTIVATION_ERROR_TOL:
                     break
 
-
-    def _update_cums(self):
-        self._cum_abs_activation += self.CUMSCORE_LR * np.abs(self.activation)
-        self._cum_sqr_activation += self.CUMSCORE_LR * self.activation ** 2
-
     def _rescale_weights(self):
-
-        #root_mean_squared_weight = np.sqrt(np.mean(
-        #    np.append(self.input_weights.ravel(), self.lateral_weights.ravel()) ** 2
-        #))
-        #self.input_weights /= root_mean_squared_weight
-        #self.lateral_weights /= root_mean_squared_weight
 
         np.clip(
             self.input_weights,
@@ -248,7 +236,7 @@ class HahLayer(Layer):
             self.activation += self.params['noise_var'] * np.random.randn(*self.activation.shape).astype('float64')
 
         # update cumulative activation per node, used for adaptive learning-rate scaling
-        self._update_cums()
+        self._cum_sqr_activation += self.CUMSCORE_LR * self.activation ** 2
 
         # Calculate update deltas
         activation_norm = self.activation / self._cum_sqr_activation
