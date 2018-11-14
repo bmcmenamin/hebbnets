@@ -176,7 +176,6 @@ class HahLayer(Layer):
 
         self._cum_sqr_activation = np.tile(1000.0, (num_nodes, 1))
 
-
     def update_activation(self, input_value=None):
         """Update activation value for Hebb/Antihebb layer
         Args:
@@ -219,7 +218,7 @@ class HahLayer(Layer):
     def _calc_weight_delta(self, input_value, target_value):
         target_norm = target_value / self._cum_sqr_activation
         outer_prod = np.outer(input_value, target_norm)
-        ident = np.eye(outer_prod.shape[1])
+        ident = np.eye(len(target_norm))
         return outer_prod.dot(ident - target_norm.T)
 
     def update_weights(self, input_value=None, target_value=None):
@@ -228,7 +227,8 @@ class HahLayer(Layer):
             input_value: set to list/numpy array being fed as input into this
                layer, otherwise input will be inferred from a previous layer
            target_value: set to list/numpy array with length equal to number of
-               nodes for supervised learning. Leave as none for unsupervised
+               nodes for supervised learning via delta rule. Leave as none for
+               unsupervised hebbian updates
         Returns:
             None. Upates self.input_weights, self.lateral_weights in place
         """
@@ -237,20 +237,17 @@ class HahLayer(Layer):
         input_value = self._get_input_values(input_value)
 
         if target_value is None:
-            target_value = np.zeros(self.activation.shape)
+            _target_value = self.activation
+        else:
+            _target_value = target_value - self.activation
 
-        target_value += self.activation
-        target_value /= 2.0
-
-        # Add a little random noise to prevent gradients from dying in
-        # thesholded activation functions
         if self.params.get('noise_var', 0) > 0:
-            target_value += self.params['noise_var'] * np.random.randn(*target_value.shape).astype('float64')
+            _target_value += self.params['noise_var'] * np.random.randn(*target_value.shape).astype('float64')
 
         # update cumulative activation per node, used for adaptive learning-rate scaling
         self._cum_sqr_activation += self.CUMSCORE_LR * self.activation ** 2
 
-        self.input_weights += self._calc_weight_delta(input_value, target_value)
+        self.input_weights += self._calc_weight_delta(input_value, _target_value)
         self.lateral_weights += self._calc_weight_delta(self.activation, self.activation)
 
         # Enforce constraints on weights

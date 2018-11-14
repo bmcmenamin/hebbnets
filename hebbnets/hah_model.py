@@ -116,8 +116,8 @@ class MultilayerHahNetwork(Network):
                 layer.update_weights()
 
 
-class MultilayerHahEmbedding(Network):
-    """A network built from one or more layers of HAH layers"""
+class MultilayerDahEmbedding(Network):
+    """A network built from one or more layers of Delta-Anti/Hebbian layers"""
 
     def _train_epoch(self, data_set, num_pairs_per_sample=10):
         """Perform an epoch-worth of model updates
@@ -132,7 +132,7 @@ class MultilayerHahEmbedding(Network):
         for samp1, class1 in data_set:
             for samp2, class2 in random.sample(data_set, num_pairs_per_sample):
 
-                class_match = 2 * ((class1 == class2) - 0.5)
+                class_match = 4 * ((class1 == class2) - 0.25)
 
                 self.propogate_input(samp1)
                 target_activations = [
