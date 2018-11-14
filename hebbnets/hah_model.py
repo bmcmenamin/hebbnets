@@ -2,15 +2,16 @@
     Class contains a pure-python/Numpy implementation for a multilayer network
     of feedforward Hebbian/Anti-Hebbian (HAH) neurons
 """
+import abc
+import itertools
 import random
 
 import numpy as np
 
 from hebbnets.hebbnets.layers import HahLayer
 
-
-class MultilayerHahNetwork(object):
-    """A network built from one or more layers of HAH layers"""
+class Network(abc.ABC):
+    """Abstract baseclass for networks"""
 
     def __init__(self, input_size, layer_sizes, **kwargs):
         self.input_value = np.zeros(input_size,)
@@ -57,6 +58,7 @@ class MultilayerHahNetwork(object):
             random.shuffle(_data)
             self._train_epoch(_data)
 
+    @abc.abstractmethod
     def _train_epoch(self, data_set):
         """Perform an epoch-worth of model updates
 
@@ -65,9 +67,7 @@ class MultilayerHahNetwork(object):
         Returns:
             None
         """
-        for samp in data_set:
-            self.propogate_input(samp)
-            self.update_weights()
+        raise NotImplementedError
 
     def propogate_input(self, input_value):
         """Given an input value, propgate activation forward through the
@@ -85,6 +85,22 @@ class MultilayerHahNetwork(object):
             else:
                 layer.update_activation()
 
+
+class MultilayerHahNetwork(Network):
+    """A network built from one or more layers of HAH layers"""
+
+    def _train_epoch(self, data_set):
+        """Perform an epoch-worth of model updates
+
+        Args:
+            data_set: an iterable of training data
+        Returns:
+            None
+        """
+        for samp in data_set:
+            self.propogate_input(samp)
+            self.update_weights()
+
     def update_weights(self):
         """Update model weights based on current activation
 
@@ -98,3 +114,46 @@ class MultilayerHahNetwork(object):
                 layer.update_weights(input_value=self.input_value)
             else:
                 layer.update_weights()
+
+
+class MultilayerDahEmbedding(Network):
+    """A network built from one or more layers of Delta-Anti/Hebbian layers"""
+
+    def _train_epoch(self, data_set, num_pairs_per_sample=10):
+        """Perform an epoch-worth of model updates
+
+        Args:
+            data_set: an iterable of tuples of (trainingdata, classlabel) pairs
+            num_pairs_per_sample: integer number of other train pairs to use per sample
+        Returns:
+            None
+        """
+
+        for samp1, class1 in data_set:
+            for samp2, class2 in random.sample(data_set, num_pairs_per_sample):
+
+                class_match = 4 * ((class1 == class2) - 0.25)
+
+                self.propogate_input(samp1)
+                target_activations = [
+                    class_match * layer.activation.copy()
+                    for layer in self.layers
+                ]
+                self.propogate_input(samp2)
+                self.update_weights(target_activations)
+
+    def update_weights(self, target_activations):
+        """Update model weights based on current activation
+
+        Args:
+            target_activations: list of target activations for each layer
+        Returns:
+            None, modifies weights in place
+        """
+        for idx, (layer, target) in enumerate(zip(self.layers, target_activations)):
+            if idx == 0:
+                layer.update_weights(
+                    input_value=self.input_value,
+                    target_value=target)
+            else:
+                layer.update_weights(target_value=target)
