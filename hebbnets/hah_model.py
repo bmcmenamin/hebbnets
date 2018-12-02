@@ -6,6 +6,8 @@ import abc
 import itertools
 import random
 
+import pyximport; pyximport.install()
+
 import numpy as np
 
 from hebbnets.hebbnets.layers import HahLayer
