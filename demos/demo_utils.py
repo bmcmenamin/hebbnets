@@ -138,27 +138,41 @@ def turn_input_weights_to_pilimg(hah_layer, patch_size):
     Returns:
         list of PIL images
     """
-    pil_imgs = []
     
     if hah_layer.params['bias']:
         weights = hah_layer.input_weights[:-1, :].T.copy()
     else:
         weights = hah_layer.input_weights.T.copy()
 
-    weights -= np.mean(weights)
-    weights /= np.std(weights, axis=1, keepdims=True)
-    np.clip(weights, -4, 4, out=weights)
-    weights -= np.median(weights)
-    weights *= 32.0
-    weights += 128
-
-    weights = np.uint8(weights)
-
+    pil_imgs = []
     for weight in weights:
-        np_img = weight.reshape(patch_size)
-        pil_imgs.append(Image.fromarray(np_img, mode='L'))
-    
+        pil_imgs.append(
+            turn_vector_to_pilimg(weight, patch_size)
+        )
+
     return pil_imgs
+
+
+def turn_vector_to_pilimg(weights_vector, patch_size, max_stdev=4):
+    """Turn input weights into PIL images
+    Args:
+        weights_vector: vector
+        patch_size: tuple with patch dimensions
+    Returns:
+        single PIL images
+    """
+
+    weights_vector -= np.median(weights_vector)
+    weights_vector /= np.sqrt(np.mean(weights_vector ** 2))
+    np.clip(weights_vector, -max_stdev, max_stdev, out=weights_vector)
+    weights_vector /= max_stdev
+    weights_vector *= 128
+    weights_vector += 128
+
+    weights_vector = np.uint8(weights_vector)
+
+    np_img = weights_vector.reshape(patch_size)
+    return Image.fromarray(np_img, mode='L')
 
 
 def place_pilimgs_in_grid(list_of_imgs, pixel_buffer=10):

@@ -242,7 +242,7 @@ class HahLayer(Layer):
             _target_value = target_value - self.activation
 
         if self.params.get('noise_var', 0) > 0:
-            _target_value += self.params['noise_var'] * np.random.randn(*target_value.shape).astype('float64')
+            _target_value += self.params['noise_var'] * np.random.randn(*_target_value.shape).astype('float64')
 
         # update cumulative activation per node, used for adaptive learning-rate scaling
         self._cum_sqr_activation += self.CUMSCORE_LR * self.activation ** 2
