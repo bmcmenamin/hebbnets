@@ -3,10 +3,9 @@
     of feedforward Hebbian/Anti-Hebbian (HAH) neurons
 """
 import abc
+import collections
 import itertools
 import random
-
-import pyximport; pyximport.install()
 
 import numpy as np
 
@@ -121,7 +120,7 @@ class MultilayerHahNetwork(Network):
 class MultilayerDahEmbedding(Network):
     """A network built from one or more layers of Delta-Anti/Hebbian layers"""
 
-    def _train_epoch(self, data_set, num_pairs_per_sample=10):
+    def _train_epoch(self, data_set, num_pairs_per_sample=5):
         """Perform an epoch-worth of model updates
 
         Args:
@@ -131,17 +130,21 @@ class MultilayerDahEmbedding(Network):
             None
         """
 
-        for samp1, class1 in data_set:
-            for samp2, class2 in random.sample(data_set, num_pairs_per_sample):
+        for targ_value1, targ_class1 in data_set:
 
-                class_match = 4 * ((class1 == class2) - 0.25)
+            targ_dataset = random.sample(data_set, num_pairs_per_sample)
+            random.shuffle(targ_dataset)
 
-                self.propogate_input(samp1)
+            for targ_value2, targ_class2 in targ_dataset:
+
+                class_match = 4.0 * ((targ_class1 == targ_class2) - 0.25)
+
+                self.propogate_input(targ_value1)
                 target_activations = [
-                    class_match * layer.activation.copy()
-                    for layer in self.layers
+                    class_match * layer.activation.copy() for layer in self.layers
                 ]
-                self.propogate_input(samp2)
+
+                self.propogate_input(targ_value2)
                 self.update_weights(target_activations)
 
     def update_weights(self, target_activations):
