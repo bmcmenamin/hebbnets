@@ -13,13 +13,13 @@ from PIL import Image
 def get_random_data(num_samples, output_dim, latent_dim=None):
     """Make a random high-dimensional dataset with low-dimensional
     latent structure
-    
+
     Args:
         num_samples: the number of samples to return
         output_dim: the dimensionality of each sample
         latent_dim: the latent dimension of the data.
             set to None to do no projection to lower dim
-        
+
     Returns:
         list of length num_samples the length output_dim numpy arrays
     """
@@ -34,7 +34,7 @@ def get_random_data(num_samples, output_dim, latent_dim=None):
         # 'latent_dim' singular vectors
         data_set -= np.mean(data_set, axis=0)
         U, S, V = np.linalg.svd(data_set)
-        data_set = (U[:, :latent_dim] * S[:latent_dim]).dot(V[:latent_dim, :])
+        data_set = np.matmul(U[:, :latent_dim] * S[:latent_dim], V[:latent_dim, :])
 
     data_set -= np.mean(data_set, axis=0)
     return list(data_set)
@@ -56,7 +56,7 @@ def retry_get_request(url, max_retries):
 
         print("Bad status code ({}). Retrying.".format(response.status_code))
         num_retries += 1
-    
+
     return response
 
 
