@@ -148,9 +148,19 @@ class MultilayerQAGRELNetwork(base_network.BaseNetwork):
         action_vector[top_choice] = 1.0
         return top_choice, action_vector
 
-    def _unidir_weight_update(self, layers, gate_layers, init_layer_val, init_gate_val):
+    def _unidir_weight_update(self, in_layers, gate_layers, init_layer_val, init_gate_val):
+        """Update the weights for one direction in the network (i.e. for the feedforward
+        of feedback network
 
-        for idx, (layer, gate_layer) in enumerate(zip(layers, gate_layers[::-1][1:])):
+        Args:
+            in_layers: iterable of layers, starting with an input layer and progressing
+              through the whole net. These are the layers with the weights to be updated.
+            gate_layers: iterable of layers that matches the length and node-sizes of layers
+              in in_layers. The activation values in these layers are used for attention gating.
+            init_layer_val: the input pattern to feed into `in_layers` and propogate forward
+            init_gate_val: the inpust pattern to feed into `gate_layers` and propogate backward.
+        """
+        for idx, (layer, gate_layer) in enumerate(zip(in_layers, gate_layers[::-1][1:])):
             layer.update_weights(
                 gate_layer.activation,
                 self.rew_prederr,
@@ -158,7 +168,7 @@ class MultilayerQAGRELNetwork(base_network.BaseNetwork):
                 layer_input_val=init_layer_val if idx == 0 else None
             )
 
-        layers[-1].update_weights(
+        in_layers[-1].update_weights(
             init_gate_val,
             self.rew_prederr,
             self.learning_rate,
@@ -183,15 +193,15 @@ class MultilayerQAGRELNetwork(base_network.BaseNetwork):
             # select action, measure it's error
             action_idx, action_vector = self.select_action()
             self.rew_prederr = float(action_idx == target_idx) - self.layers[-1].activation[action_idx]
+
             # backward pass
             self.propogate_input(action_vector, layer_attr='fb_layers')
 
             # Update FF, FB weights
             self._unidir_weight_update(
                 self.layers, self.fb_layers,
-                in_value, action_vector
-            )
+                in_value, action_vector)
+
             self._unidir_weight_update(
                 self.fb_layers, self.layers,
-                action_vector, in_value
-            )
+                action_vector, in_value)

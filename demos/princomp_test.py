@@ -4,11 +4,6 @@
 
 import argparse
 import os
-import sys
-
-repo_root_path = os.path.abspath(os.path.pardir)
-if repo_root_path not in sys.path:
-    sys.path.append(repo_root_path)
 
 import numpy as np
 
