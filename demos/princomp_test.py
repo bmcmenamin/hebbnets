@@ -4,16 +4,11 @@
 
 import argparse
 import os
-import sys
-
-repo_root_path = os.path.abspath(os.path.join(os.path.pardir, 'hebbnets'))
-if repo_root_path not in sys.path:
-    sys.path.append(repo_root_path)
 
 import numpy as np
 
 from demo_utils import get_random_data
-from hebbnets.hebbnets.hah_model import MultilayerHahNetwork
+from hebbnets.networks import MultilayerHahNetwork
 
 
 np.set_printoptions(suppress=True)
@@ -92,7 +87,7 @@ def main(args):
     hebb_princomps /= np.linalg.norm(hebb_princomps, axis=0, keepdims=True)
 
     # Show the inner product of top two PCs with learned input weights
-    inner_prod_mat = real_princomps.T.dot(hebb_princomps)
+    inner_prod_mat = real_princomps.T.matmul(hebb_princomps)
 
     prod_as_string = np.array_str(
         inner_prod_mat,
