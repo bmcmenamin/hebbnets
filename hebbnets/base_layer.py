@@ -3,8 +3,19 @@
     network that learns using Hebbian/Anti-Hebbian (HAH) weight updates and a
     layer for Q-AQREL reinforcement learning
 """
+
 import abc
 import numpy as np
+
+
+from hebbnets import activation
+
+
+ACTIVATION_REGISTRY = {
+    'linear': activation.LinearActivation,
+    'sigmoid': activation.SigmoidActivation,
+    'relu': activation.ReLUActivation
+}
 
 
 class BaseLayer(abc.ABC):
@@ -26,33 +37,6 @@ class BaseLayer(abc.ABC):
                 )
 
         return "<{}>".format(",".join(to_repr))
-
-
-    @staticmethod
-    def _relu(activation):
-        return np.maximum(activation, 0,)
-
-    @staticmethod
-    def _relu_deriv(activation):
-        return (activation > 0).astype(float)
-
-    @staticmethod
-    def _sigmoid(activation):
-        return 1.0 / (1 + np.exp(-activation))
-
-    @staticmethod
-    def _sigmoid_deriv(activation):
-        #pylint: disable=protected-access
-        sig = self._sigmoid(activation)
-        return sig * (1 - sig)
-
-    @staticmethod
-    def _linear(activation):
-        return activation
-
-    @staticmethod
-    def _linear_deriv(activation):
-        return np.ones(activation.shape)
 
     @staticmethod
     def glorot_init(in_dim, out_dim):
@@ -130,22 +114,9 @@ class BaseLayer(abc.ABC):
                 format(type(prev_layer))
             )
 
-        _activation_func_names = {
-            'relu': self._relu,
-            'sigmoid': self._sigmoid,
-            'linear': self._linear,
-        }
-
-        _activation_deriv_func_names = {
-            'relu': self._relu_deriv,
-            'sigmoid': self._sigmoid_deriv,
-            'linear': self._linear_deriv,
-        }
-
-        if act_type not in _activation_func_names:
+        if act_type not in ACTIVATION_REGISTRY:
             raise NameError("Activation function named %s not defined", act_type)
-        self.activation_func = _activation_func_names[act_type]
-        self.activation_deriv_func = _activation_deriv_func_names[act_type]
+        self.activation_type = ACTIVATION_REGISTRY[act_type]()
 
         self.params = {
             'bias': has_bias,

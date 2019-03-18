@@ -52,7 +52,7 @@ class FeedforwardLayer(base_layer.BaseLayer):
         """
         input_value = self._get_input_values(input_value)
         input_value_times_weights = np.matmul(self.input_weights.T, input_value)
-        self.activation = self.activation_func(input_value_times_weights)
+        self.activation = self.activation_type.apply(input_value_times_weights)
 
 
 class QagrelLayer(FeedforwardLayer):
@@ -73,7 +73,7 @@ class QagrelLayer(FeedforwardLayer):
             None, updates weight in place
         """
 
-        target_vec = self.activation_deriv_func(self.activation) * gate_value.reshape(-1, 1)
+        target_vec = self.activation_type.apply_deriv(self.activation) * gate_value.reshape(-1, 1)
         outer_prod = np.matmul(
             self._get_input_values(layer_input_val),
             target_vec.T
@@ -139,7 +139,7 @@ class HahLayer(base_layer.BaseLayer):
             self.activation = np.matmul(_lateral_inv, input_value_times_weights)
         else:
             for _ in range(self.MAX_ACTIVATION_TIME_STEPS):
-                next_activation = self.activation_func(
+                next_activation = self.activation_type.apply(
                     input_value_times_weights - np.matmul(self.lateral_weights.T, self.activation)
                 )
 
