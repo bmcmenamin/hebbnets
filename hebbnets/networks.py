@@ -29,6 +29,8 @@ class MultilayerHahNetwork(base_network.BaseNetwork):
             self.propogate_input(samp)
             self.update_weights()
 
+        return None
+
     def update_weights(self):
         """Update model weights based on current activation
 
@@ -56,9 +58,10 @@ class MultilayerDahEmbedding(base_network.BaseNetwork):
             data_set: an iterable of tuples of (trainingdata, classlabel) pairs
             num_pairs_per_sample: integer number of other train pairs to use per sample
         Returns:
-            None
+            scalar performance value for this epoch
         """
 
+        sse_per_sample = []
         for targ_value1, targ_class1 in data_set:
 
             targ_dataset = random.sample(data_set, num_pairs_per_sample)
@@ -74,7 +77,10 @@ class MultilayerDahEmbedding(base_network.BaseNetwork):
                 ]
 
                 self.propogate_input(targ_value2)
-                self.update_weights(target_activations)
+                sse = self.update_weights(target_activations)
+                sse_per_sample.append(sse)
+
+        return np.mean(sse)
 
     def update_weights(self, target_activations):
         """Update model weights based on current activation
@@ -82,18 +88,27 @@ class MultilayerDahEmbedding(base_network.BaseNetwork):
         Args:
             target_activations: list of target activations for each layer
         Returns:
-            None, modifies weights in place
+            Sum squared error across all layers
         """
+        sse_per_layer = []
         for idx, (layer, target) in enumerate(zip(self.layers, target_activations)):
             if idx == 0:
                 layer.update_weights(
                     input_value=self.input_value,
                     target_value=target)
+                sse_per_layer.append(
+                    np.sum((self.input_value - target) ** 2)
+                )
             else:
                 layer.update_weights(target_value=target)
+                sse_per_layer.append(
+                    np.sum((layer.activation - target) ** 2)
+                )
+
+        return np.sum(sse_per_layer)
 
 
-class MultilayerQAGRELNetwork(base_network.BaseNetwork):
+class MultilayerQAGRELNetwork(base_network.BaseLearningScheduleNetwork):
     """A network built from one or more layers of Q-AGREL layers"""
 
     LAYER_TYPE = layers.QagrelLayer
@@ -118,7 +133,6 @@ class MultilayerQAGRELNetwork(base_network.BaseNetwork):
         kwargs = collections.ChainMap({'has_bias': False}, kwargs)
         self.rew_prederr = 0
         self.action_temperature = kwargs.get('action_temperature', 0.5)
-        self.learning_rate = kwargs.get('learning_rate', 0.01)
 
         super().__init__(input_size, layer_sizes, **kwargs)
 
@@ -164,14 +178,14 @@ class MultilayerQAGRELNetwork(base_network.BaseNetwork):
             layer.update_weights(
                 gate_layer.activation,
                 self.rew_prederr,
-                self.learning_rate,
+                self._learning_rate,
                 layer_input_val=init_layer_val if idx == 0 else None
             )
 
         in_layers[-1].update_weights(
             init_gate_val,
             self.rew_prederr,
-            self.learning_rate,
+            self._learning_rate,
             layer_input_val=None
         )
 
@@ -182,9 +196,10 @@ class MultilayerQAGRELNetwork(base_network.BaseNetwork):
             data_set: an iterable of tuples of (trainingdata, classlabel) pairs
             num_pairs_per_sample: integer number of other train pairs to use per sample
         Returns:
-            None
+            scalar performance value for this epoch
         """
 
+        res_samples = []
         for in_value, target_idx in data_set:
 
             # Forward pass
@@ -192,7 +207,11 @@ class MultilayerQAGRELNetwork(base_network.BaseNetwork):
 
             # select action, measure it's error
             action_idx, action_vector = self.select_action()
-            self.rew_prederr = float(action_idx == target_idx) - self.layers[-1].activation[action_idx]
+            self.rew_prederr = (
+                float(action_idx == target_idx) - 
+                self.layers[-1].activation[action_idx]
+            )
+            res_samples.append(self.rew_prederr ** 2)
 
             # backward pass
             self.propogate_input(action_vector, layer_attr='fb_layers')
@@ -205,3 +224,5 @@ class MultilayerQAGRELNetwork(base_network.BaseNetwork):
             self._unidir_weight_update(
                 self.fb_layers, self.layers,
                 action_vector, in_value)
+
+        return np.mean(res_samples)

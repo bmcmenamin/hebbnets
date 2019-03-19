@@ -3,6 +3,7 @@
     of feedforward Hebbian/Anti-Hebbian (HAH) neurons
 """
 import abc
+import itertools
 import random
 
 import numpy as np
@@ -45,13 +46,20 @@ class BaseNetwork(abc.ABC):
             data_set: an iterable of training data
             num_epochs: number of epochs to run training
         Returns:
-            None
+            per-epoch training results
         """
 
+        fit_per_epoch = []
         _data = data_set.copy()
         for _ in range(num_epochs):
             random.shuffle(_data)
-            self._train_epoch(_data)
+
+            fit_per_epoch.append(
+                self._train_epoch(_data)
+            )
+
+        return fit_per_epoch
+
 
     @abc.abstractmethod
     def _train_epoch(self, data_set):
@@ -79,3 +87,58 @@ class BaseNetwork(abc.ABC):
                 layer.update_activation(input_value=self.input_value)
             else:
                 layer.update_activation()
+
+
+class BaseLearningScheduleNetwork(BaseNetwork):
+    """Updates the base network to use a learning rate that
+    changes according to a schedule
+    """
+
+    def __init__(self, input_size, layer_sizes, **kwargs):
+
+        super().__init__(input_size, layer_sizes, **kwargs)
+
+        self.learning_rate_schedule = kwargs.get(
+            'learning_rate_schedule',
+            {'constant': 0.01}
+        )
+        self._learning_rate = 0.01
+
+    def yield_learning_rates(self, **kwargs):
+        """Yield the learning rates for each epoch"""
+
+        if "constant" in self.learning_rate_schedule:
+            while True:
+                yield self.learning_rate_schedule["constant"]
+
+        if "cyclical" in self.learning_rate_schedule:
+            half_cycle = list(np.arange(
+                self.learning_rate_schedule["cyclical"]["min_lr"],
+                self.learning_rate_schedule["cyclical"]["max_lr"],
+                self.learning_rate_schedule["cyclical"]["period"] // 2,
+            ))
+
+            value_list = half_cycle + half_cycle[::-1][1:-1]
+            yield from itertools.cycle(value_list)
+
+    def train(self, data_set, num_epochs=3):
+        """Perform an epoch-worth of model updates
+
+        Args:
+            data_set: an iterable of training data
+            num_epochs: number of epochs to run training
+        Returns:
+            per-epoch training results
+        """
+
+        fit_per_epoch = []
+        _data = data_set.copy()
+        for _, learning_rate in zip(range(num_epochs), self.yield_learning_rates()):
+            self._learning_rate = learning_rate
+            random.shuffle(_data)
+
+            fit_per_epoch.append(
+                self._train_epoch(_data)
+            )
+
+        return fit_per_epoch
